@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0D0F1A">
+    <title>Lynor Chatbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell" data-accent="violet">
+      <div class="starfield" aria-hidden="true"></div>
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">L</div>
+          <div>
+            <h1>Lynor.ai</h1>
+            <p>AI CHAT COMPANION</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="chip-button active" id="accentViolet" type="button">COCOA</button>
+          <button class="chip-button" id="accentCyan" type="button">LATTE</button>
+          <button class="icon-button small" id="speakToggle" type="button" aria-pressed="true" title="Speech on">🔊</button>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="Lynor chatbot">
+        <aside class="side-panel">
+          <div class="recent-panel">
+            <h2>RECENT MESSAGES</h2>
+            <div class="recent-list" id="recentList">
+              <p class="empty-recent">No messages yet.</p>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="side-actions">
+            <a class="side-button log" href="/api/log" target="_blank" rel="noreferrer">LOG</a>
+            <button class="side-button clear" id="clearChat" type="button">CLEAR</button>
+          </div>
+        </aside>
+
+        <section class="chat-area">
+          <div class="assistant-card">
+            <div class="avatar-frame">
+              <div class="orbital" aria-hidden="true"></div>
+              <div class="pet-avatar" id="petAvatar" aria-hidden="true">
+                <div class="hair-back"></div>
+                <div class="hair-bun left"></div>
+                <div class="hair-bun right"></div>
+                <div class="face">
+                  <span class="bang bang-one"></span>
+                  <span class="bang bang-two"></span>
+                  <span class="eye left"></span>
+                  <span class="eye right"></span>
+                  <span class="blush left"></span>
+                  <span class="blush right"></span>
+                  <span class="mouth"></span>
+                </div>
+              </div>
+            </div>
+            <div class="assistant-copy">
+              <p class="assistant-kicker">YOUR AI COMPANION</p>
+              <h2>Lynor</h2>
+              <p>Warm voice chat, typed replies, and saved conversations.</p>
+            </div>
+            <div class="state-pill" id="statePill">
+              <span></span>
+              <strong>IDLE</strong>
+            </div>
+          </div>
+
+          <div class="mobile-strip">
+            <div class="mobile-paw">L</div>
+            <div>
+              <p class="mobile-title">Lynor.ai</p>
+              <p class="mobile-subtitle">AI CHAT COMPANION</p>
+            </div>
+            <a href="/api/log" target="_blank" rel="noreferrer">LOG</a>
+          </div>
+
+          <div class="messages" id="messages" aria-live="polite">
+            <div class="start-state" id="startState">
+              <div class="start-paw">L</div>
+              <p>START A CONVERSATION</p>
+            </div>
+          </div>
+
+          <form class="composer" id="chatForm">
+            <div class="language-row">
+              <button class="language-toggle" id="languageToggle" type="button" aria-label="Switch language">
+                <span class="selected" id="englishLabel">EN</span>
+                <span>/</span>
+                <span id="malayalamLabel">മലയാളം</span>
+              </button>
+            </div>
+            <div class="input-row">
+              <div class="input-wrap">
+                <input id="messageInput" type="text" autocomplete="off" placeholder="Talk to Lynor..." aria-label="Message">
+                <div class="listening-dots" id="listeningDots" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+              <button class="icon-button mic" id="micButton" type="button" title="Start voice input" aria-label="Start voice input">🎤</button>
+              <button class="icon-button send" type="submit" title="Send message" aria-label="Send message">➤</button>
+            </div>
+            <p class="voice-warning" id="voiceWarning">Voice input not supported in this browser. Try Chrome or Edge.</p>
+          </form>
+        </section>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
