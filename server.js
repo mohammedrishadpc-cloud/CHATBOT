@@ -106,15 +106,16 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && request.url === "/api/status") {
+  if (request.method === "GET" && (request.url === "/api/health" || request.url === "/api/status")) {
     const mode = getAiMode();
     sendJson(response, 200, {
+      ok: true,
       ai: mode,
       googleSearch: mode === "google",
       message:
         mode === "google"
           ? "Google Search answers are enabled."
-          : "Using web search fallback. Add GEMINI_API_KEY in .env for Google Search answers.",
+          : "Using web search fallback. Add GEMINI_API_KEY for Google Search answers.",
     });
     return;
   }

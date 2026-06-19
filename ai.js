@@ -47,6 +47,17 @@ function buildHistoryContents(history = []) {
     }));
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function askGeminiWithGoogleSearch(message, language = "en", history = []) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("Gemini API key is not configured.");
@@ -56,7 +67,7 @@ async function askGeminiWithGoogleSearch(message, language = "en", history = [])
       ? "You are Lynor, a friendly AI chat companion. Reply in Malayalam when the user writes in Malayalam. Use Google Search for factual, current, and general knowledge questions. Give clear, helpful answers in a warm conversational tone. Keep replies concise unless the user asks for detail."
       : "You are Lynor, a friendly AI chat companion. Use Google Search for factual, current, and general knowledge questions. Give clear, helpful answers in a warm conversational tone. Keep replies concise unless the user asks for detail.";
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
     {
       method: "POST",
@@ -69,7 +80,8 @@ async function askGeminiWithGoogleSearch(message, language = "en", history = [])
         contents: [...buildHistoryContents(history), { role: "user", parts: [{ text: message }] }],
         tools: [{ google_search: {} }],
       }),
-    }
+    },
+    60000
   );
 
   const payload = await response.json();

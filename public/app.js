@@ -16,6 +16,7 @@ const listeningDots = document.querySelector("#listeningDots");
 const accentViolet = document.querySelector("#accentViolet");
 const accentCyan = document.querySelector("#accentCyan");
 const startState = document.querySelector("#startState");
+const connectionBanner = document.querySelector("#connectionBanner");
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const stateColors = {
@@ -33,6 +34,89 @@ let isListening = false;
 let language = "en";
 let chatMessages = [];
 let messageIdCounter = 0;
+let serverOnline = false;
+let voiceSendLock = false;
+
+function isLocalHost() {
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
+function canUseVoiceInput() {
+  return Boolean(SpeechRecognition) && (window.isSecureContext || isLocalHost());
+}
+
+function canUseServerApi() {
+  return window.location.protocol === "http:" || window.location.protocol === "https:";
+}
+
+function setConnectionBanner(message, type = "error") {
+  if (!connectionBanner) return;
+  if (!message) {
+    connectionBanner.hidden = true;
+    connectionBanner.textContent = "";
+    connectionBanner.classList.remove("ok", "visible");
+    return;
+  }
+
+  connectionBanner.hidden = false;
+  connectionBanner.classList.add("visible");
+  connectionBanner.classList.toggle("ok", type === "ok");
+  connectionBanner.textContent = message;
+}
+
+function formatConnectionError(error) {
+  const message = String(error?.message || error || "Unknown error");
+
+  if (error?.name === "AbortError" || /timed out/i.test(message)) {
+    return language === "ml"
+      ? "കണക്ഷൻ സമയം കഴിഞ്ഞു. സെർവർ waking up ആകാം — വീണ്ടും ശ്രമിക്കൂ."
+      : "Connection timed out. If this is a hosted site, the server may be waking up — try again in 30 seconds.";
+  }
+
+  if (/failed to fetch|networkerror|load failed|connection refused/i.test(message)) {
+    if (!canUseServerApi()) {
+      return language === "ml"
+        ? "ഈ ഫയൽ നേരിട്ട് തുറന്നതാണ്. `node server.js` റൺ ചെയ്ത് http://localhost:5345 തുറക്കുക."
+        : "You opened the HTML file directly. Run `node server.js` and open http://localhost:5345 instead.";
+    }
+
+    return language === "ml"
+      ? "കണക്ഷൻ പരാജയപ്പെട്ടു. സെർവർ റൺ ചെയ്യുന്നുണ്ടോ എന്ന് പരിശോധിക്കൂ."
+      : "Connection failed. Make sure the server is running, or wait if your hosted site is waking up.";
+  }
+
+  return message;
+}
+
+async function checkServerConnection() {
+  if (!canUseServerApi()) {
+    serverOnline = false;
+    setConnectionBanner(
+      language === "ml"
+        ? "സെർവറിലേക്ക് കണക്റ്റ് ചെയ്യാൻ http://localhost:5345 ഉപയോഗിക്കുക."
+        : "Open http://localhost:5345 after running `node server.js` — do not open the HTML file directly.",
+      "error"
+    );
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch("/api/health", { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new Error(`Server returned ${response.status}`);
+    serverOnline = true;
+    setConnectionBanner("", "ok");
+    return true;
+  } catch (error) {
+    serverOnline = false;
+    setConnectionBanner(formatConnectionError(error), "error");
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 function createMessageId() {
   messageIdCounter += 1;
@@ -168,10 +252,6 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-function canUseServerApi() {
-  return window.location.protocol === "http:" || window.location.protocol === "https:";
-}
-
 async function requestBotReply(message, inputType) {
   if (!canUseServerApi()) {
     return {
@@ -189,14 +269,36 @@ async function requestBotReply(message, inputType) {
     .slice(-10)
     .map((entry) => ({ role: entry.role, text: entry.text }));
 
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, inputType, language, history }),
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "The server could not reply.");
-  return payload;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 90000);
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, inputType, language, history }),
+      signal: controller.signal,
+    });
+
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error("Server returned an invalid response.");
+    }
+
+    if (!response.ok) throw new Error(payload.error || `Server error (${response.status}).`);
+
+    serverOnline = true;
+    setConnectionBanner("", "ok");
+    return payload;
+  } catch (error) {
+    serverOnline = false;
+    setConnectionBanner(formatConnectionError(error), "error");
+    throw new Error(formatConnectionError(error));
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function deliverBotReply(reply) {
@@ -224,10 +326,7 @@ async function sendMessage(message, inputType = "text") {
   } catch (error) {
     console.warn("Server chat failed.", error);
     hideTyping();
-    const fallback =
-      language === "ml"
-        ? `ക്ഷമിക്കണം, ഉത്തരം ലഭിച്ചില്ല. (${error.message})`
-        : `Sorry, I could not get an answer. (${error.message})`;
+    const fallback = formatConnectionError(error);
     addMessage("bot", fallback);
     speak(fallback);
     setBabluState("error");
@@ -235,13 +334,34 @@ async function sendMessage(message, inputType = "text") {
   }
 }
 
+function getVoiceErrorMessage(errorCode) {
+  const messages = {
+    "not-allowed": "Microphone permission was blocked. Allow mic access in your browser settings.",
+    network:
+      "Voice connection failed. Use Chrome or Edge on https:// or http://localhost, and check your internet.",
+    "no-speech": "I did not hear anything. Try speaking again closer to the microphone.",
+    aborted: "Voice input was stopped.",
+    "audio-capture": "No microphone was found. Connect a mic and try again.",
+    "service-not-allowed": "Voice input is not allowed on this page. Open the app through the server link.",
+  };
+
+  return messages[errorCode] || `Voice input error: ${errorCode}`;
+}
+
 function setupSpeechRecognition() {
-  if (!SpeechRecognition) {
+  if (!canUseVoiceInput()) {
     micButton.disabled = true;
-    micButton.title = "Speech recognition is not supported in this browser";
+    micButton.title = SpeechRecognition
+      ? "Voice needs HTTPS or localhost — open via the server link"
+      : "Speech recognition is not supported in this browser";
+    voiceWarning.textContent = SpeechRecognition
+      ? "Voice chat needs a secure connection. Open http://localhost:5345 or your https:// deployed link in Chrome or Edge."
+      : "Voice input not supported in this browser. Try Chrome or Edge.";
     voiceWarning.classList.add("visible");
     return;
   }
+
+  voiceWarning.classList.remove("visible");
 
   recognition = new SpeechRecognition();
   recognition.continuous = false;
@@ -268,9 +388,9 @@ function setupSpeechRecognition() {
   };
 
   recognition.onerror = (event) => {
-    const message = event.error === "not-allowed"
-      ? "Microphone permission was blocked."
-      : `Voice input error: ${event.error}`;
+    if (event.error === "aborted") return;
+
+    const message = getVoiceErrorMessage(event.error);
     addMessage("bot", message);
     speak(message);
     setBabluState("error");
@@ -285,7 +405,12 @@ function setupSpeechRecognition() {
       else interim += transcript;
     }
     input.value = finalText || interim;
-    if (finalText.trim()) sendMessage(finalText, "voice");
+    if (finalText.trim() && !voiceSendLock) {
+      voiceSendLock = true;
+      sendMessage(finalText, "voice").finally(() => {
+        voiceSendLock = false;
+      });
+    }
   };
 }
 
@@ -308,14 +433,48 @@ form.addEventListener("submit", (event) => {
   sendMessage(input.value, "text");
 });
 
-micButton.addEventListener("click", () => {
+micButton.addEventListener("click", async () => {
   if (!recognition) return;
+
   if (isListening) {
     recognition.stop();
     return;
   }
+
+  if (!canUseVoiceInput()) {
+    voiceWarning.classList.add("visible");
+    return;
+  }
+
+  try {
+    if (navigator.mediaDevices?.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  } catch {
+    const message = "Microphone permission was blocked. Allow mic access and try again.";
+    addMessage("bot", message);
+    speak(message);
+    setBabluState("error");
+    return;
+  }
+
   recognition.lang = language === "ml" ? "ml-IN" : "en-US";
-  recognition.start();
+
+  try {
+    recognition.start();
+  } catch (error) {
+    if (/already started/i.test(String(error.message))) {
+      recognition.stop();
+      window.setTimeout(() => recognition.start(), 250);
+      return;
+    }
+
+    const message = getVoiceErrorMessage("network");
+    addMessage("bot", message);
+    speak(message);
+    setBabluState("error");
+  }
 });
 
 speakToggle.addEventListener("click", () => {
@@ -364,6 +523,7 @@ accentCyan.addEventListener("click", () => {
 setupSpeechRecognition();
 updateLanguageUI();
 setBabluState("idle");
+checkServerConnection();
 
 if (!canUseServerApi()) {
   document.querySelectorAll('a[href="/api/log"]').forEach((link) => {

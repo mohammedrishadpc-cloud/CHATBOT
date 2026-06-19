@@ -1066,6 +1066,32 @@ input.listening {
   display: block;
 }
 
+.connection-banner {
+  margin: 0 22px 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 14px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.connection-banner.ok {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.1);
+  color: #bbf7d0;
+}
+
+.connection-banner.visible {
+  display: block;
+}
+
+.connection-banner[hidden] {
+  display: none !important;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
